@@ -28,7 +28,7 @@ func (app *Config) HandleActors(w http.ResponseWriter, r *http.Request) {
 		app.readJSON(r, w, &actor)
 		actor.ActorID, err = strconv.Atoi(r.URL.Query().Get("id"))
 		if err != nil {
-			log.Println("Error getting actor, unsupported value", err)
+			log.Println("Error getting actor, invalid value", err)
 			app.errorJSON(w, errors.New("invalid request"), http.StatusBadRequest)
 			return
 		}
@@ -65,9 +65,12 @@ func (app *Config) HandleActors(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodGet:
 		// Handle get request ==> return all actors
 		actors, err := app.Models.Actor.GetAll()
-		if err != nil {
+		if errors.Is(err, models.ErrNoRecord) {
+			app.errorJSON(w, models.ErrNoRecord, http.StatusNotFound)
+			return
+		} else if err != nil {
 			log.Println("Error getting actors", err)
-			app.errorJSON(w, errors.New("error getting actors"), http.StatusInternalServerError)
+			app.errorJSON(w, errors.New("Error getting actors"), http.StatusInternalServerError)
 			return
 		}
 

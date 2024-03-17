@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"filmoteka/domain/models"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -28,6 +29,7 @@ func (app *Config) HandleMovies(w http.ResponseWriter, r *http.Request) {
 
 		if sortOk && idOk {
 			app.errorJSON(w, errors.New("invalid request"), http.StatusBadRequest)
+
 		} else if idOk {
 			movie := &models.Movie{}
 			// Fetch movie by id
@@ -45,21 +47,29 @@ func (app *Config) HandleMovies(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Message: "Movie retrieved", Data: movie})
+
 		} else if sortOk {
 			// Fetch all movies and sort
 			movies, err := app.Models.Movie.GetAll(sortParam[0])
-			if err != nil {
+			if errors.Is(err, models.ErrNoRecord) {
+				app.errorJSON(w, models.ErrNoRecord, http.StatusNotFound)
+				return
+			} else if err != nil {
 				log.Println("Error getting movies", err)
-				app.errorJSON(w, errors.New("error getting movies"), http.StatusInternalServerError)
+				app.errorJSON(w, err, http.StatusInternalServerError)
 				return
 			}
 			app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Message: "Movies retrieved", Data: movies})
+
 		} else {
 			// Fetch all movies
 			movies, err := app.Models.Movie.GetAll("")
-			if err != nil {
+			if errors.Is(err, models.ErrNoRecord) {
+				app.errorJSON(w, models.ErrNoRecord, http.StatusNotFound)
+				return
+			} else if err != nil {
 				log.Println("Error getting movies", err)
-				app.errorJSON(w, errors.New("error getting movies"), http.StatusInternalServerError)
+				app.errorJSON(w, err, http.StatusInternalServerError)
 				return
 			}
 			app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Message: "Movies retrieved", Data: movies})
@@ -132,6 +142,97 @@ func (app *Config) HandleMovies(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		app.writeJSON(w, http.StatusCreated, jsonResponse{Error: false, Message: "Movie successfully deleted"})
+
+	}
+}
+
+// HandleMoviesByName retrieve movie by the name of the movie/name of the actor
+func (app *Config) HandleMoviesByName(w http.ResponseWriter, r *http.Request) {
+	switch {
+	case r.Method == http.MethodGet:
+		expectedParams := map[string]bool{
+			"firstname": true,
+			"lastname":  true,
+			"moviename": true,
+		}
+
+		for param := range r.URL.Query() {
+			if !expectedParams[param] {
+				log.Println("Invalid request parameter: ", param)
+				app.errorJSON(w, errors.New("invalid request parameter. "), http.StatusBadRequest)
+				return
+			}
+		}
+
+		firstnameParam, firstnameOk := r.URL.Query()["firstname"]
+		lastnameParam, lastnameOk := r.URL.Query()["lastname"]
+		movieParam, movieOk := r.URL.Query()["moviename"]
+		movie := &models.Movie{}
+
+		if firstnameOk && movieOk || lastnameOk && movieOk {
+			app.errorJSON(w, errors.New("invalid request"), http.StatusBadRequest)
+
+		} else if firstnameOk && len(firstnameParam) > 0 && lastnameOk && len(lastnameParam) > 0 {
+			// Fetch movies by the name of the actor
+			firstname := firstnameParam[0]
+			lastname := lastnameParam[0]
+
+			movies, err := movie.GetByActorName(firstname, lastname)
+			if errors.Is(err, models.ErrNoRecord) {
+				app.errorJSON(w, models.ErrNoRecord, http.StatusNotFound)
+				return
+			} else if err != nil {
+				log.Println("Error getting movies", err)
+				app.errorJSON(w, err, http.StatusInternalServerError)
+				return
+			}
+
+			app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Message: fmt.Sprint("Movie retrieved for actor ", firstnameParam, " ", lastnameParam), Data: movies})
+
+		} else if firstnameOk && len(firstnameParam) > 0 {
+			firstname := firstnameParam[0]
+			lastname := ""
+			//movie := &models.Movie{}
+			movies, err := movie.GetByActorName(firstname, lastname)
+			if errors.Is(err, models.ErrNoRecord) {
+				app.errorJSON(w, models.ErrNoRecord, http.StatusNotFound)
+				return
+			} else if err != nil {
+				log.Println("Error getting movies", err)
+				app.errorJSON(w, err, http.StatusInternalServerError)
+				return
+			}
+			app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Message: fmt.Sprint("Movie retrieved for actor ", firstnameParam, " ", lastnameParam), Data: movies})
+
+		} else if lastnameOk && len(lastnameParam) > 0 {
+			firstname := ""
+			lastname := lastnameParam[0]
+			//movie := &models.Movie{}
+			movies, err := movie.GetByActorName(firstname, lastname)
+			if errors.Is(err, models.ErrNoRecord) {
+				app.errorJSON(w, models.ErrNoRecord, http.StatusNotFound)
+				return
+
+			} else if err != nil {
+				log.Println("Error getting movies", err)
+				app.errorJSON(w, err, http.StatusInternalServerError)
+				return
+			}
+			app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Message: fmt.Sprint("Movie retrieved for actor ", firstnameParam, " ", lastnameParam), Data: movies})
+
+		} else if movieOk && len(movieParam) > 0 {
+			// Fetch all movies and sort
+			movies, err := movie.GetByMovieName(movieParam[0])
+			if err != nil {
+				log.Println("Error getting movies", err)
+				app.errorJSON(w, errors.New("error getting movies"), http.StatusInternalServerError)
+				return
+			}
+			app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Message: "Movies retrieved", Data: movies})
+
+		} else {
+			app.errorJSON(w, errors.New("invalid request"), http.StatusBadRequest)
+		}
 
 	}
 }

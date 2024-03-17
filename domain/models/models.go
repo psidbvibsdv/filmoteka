@@ -11,6 +11,8 @@ import (
 	"time"
 )
 
+var ErrNoRecord = errors.New("no entries found")
+
 type Date struct {
 	sql.NullTime
 }
@@ -34,9 +36,9 @@ func (dt *Date) UnmarshalJSON(b []byte) (err error) {
 }
 
 type Models struct {
-	Actor      Actor
-	Movie      Movie
-	ActorMovie ActorMovie
+	Actor          Actor
+	Movie          Movie
+	MovieWithActor MovieWithActor
 }
 
 type User struct {
@@ -51,9 +53,13 @@ type Actor struct {
 	DateOfBirth Date   `json:"dateofbirth,omitempty"`
 }
 
-type ActorMovie struct {
-	ActorID int `json:"actor_id,omitempty"`
-	MovieID int `json:"movie_id,omitempty"`
+type MovieWithActor struct {
+	MovieID     int     `json:"movieid,omitempty"`
+	Title       string  `json:"Title"`
+	Description string  `json:"description"`
+	Rating      float64 `json:"rating"`
+	ReleaseDate Date    `json:"releasedate"`
+	ActorName   string  `json:"actorname"`
 }
 
 type Movie struct {
@@ -71,9 +77,9 @@ func New(dbPool *sql.DB) Models {
 	db = dbPool
 
 	return Models{
-		Actor:      Actor{},
-		Movie:      Movie{},
-		ActorMovie: ActorMovie{},
+		Actor:          Actor{},
+		Movie:          Movie{},
+		MovieWithActor: MovieWithActor{},
 	}
 }
 
@@ -138,6 +144,10 @@ func (a *Actor) GetAll() ([]*Actor, error) {
 		}
 
 		actors = append(actors, &actor)
+	}
+	if len(actors) < 1 {
+		log.Println("No actors found in the table")
+		return nil, ErrNoRecord
 	}
 
 	return actors, nil
@@ -283,6 +293,10 @@ func (m *Movie) GetAll(sortParam string) ([]*Movie, error) {
 
 		movies = append(movies, &movie)
 	}
+	if len(movies) < 1 {
+		log.Println("No movies found in the table")
+		return nil, ErrNoRecord
+	}
 	return movies, nil
 }
 
@@ -373,4 +387,97 @@ func (m *Movie) Delete() error {
 		return err
 	}
 	return nil
+}
+
+func (m *Movie) GetByActorName(name string, surname string) ([]*MovieWithActor, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	query := `SELECT m.*, a.name AS actor_name
+FROM Movies m
+         JOIN actormovie am ON m.movieid = am.movieid
+         JOIN Actors a ON am.actorid = a.actorid 
+WHERE a.name ILIKE  $1 OR a.name ILIKE $2;`
+
+	rows, err := db.QueryContext(ctx, query, "%"+name+"%", "%"+surname+"%")
+	if err != nil {
+		log.Println("Error getting movies by actor name from the table", err)
+		return nil, err
+	}
+	defer func(rows *sql.Rows) {
+		err = rows.Close()
+		if err != nil {
+			log.Println("Error closing rows", err)
+		}
+	}(rows)
+
+	var movies []*MovieWithActor
+
+	for rows.Next() {
+		var movie MovieWithActor
+		err = rows.Scan(
+			&movie.MovieID,
+			&movie.Title,
+			&movie.Description,
+			&movie.Rating,
+			&movie.ReleaseDate,
+			&movie.ActorName,
+		)
+		if err != nil {
+			log.Println("Error scanning actor rows", err)
+			return nil, err
+		}
+
+		movies = append(movies, &movie)
+	}
+	if len(movies) < 1 {
+		log.Println("No movies found in the table")
+		return nil, ErrNoRecord
+	}
+
+	return movies, nil
+
+}
+
+func (m *Movie) GetByMovieName(moviename string) ([]*Movie, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+	query := `SELECT movieid, title, description, rating, releasedate FROM movies WHERE title ILIKE $1 OR description ILIKE $2;`
+
+	rows, err := db.QueryContext(ctx, query, "%"+moviename+"%", "%"+moviename+"%")
+	if err != nil {
+		log.Println("Error getting movies by movie name from the table", err)
+		return nil, err
+	}
+	defer func(rows *sql.Rows) {
+		err = rows.Close()
+		if err != nil {
+			log.Println("Error closing rows", err)
+		}
+	}(rows)
+
+	var movies []*Movie
+
+	for rows.Next() {
+		var movie Movie
+		err = rows.Scan(
+			&movie.MovieID,
+			&movie.Title,
+			&movie.Description,
+			&movie.Rating,
+			&movie.ReleaseDate,
+		)
+		if err != nil {
+			log.Println("Error scanning actor rows", err)
+			return nil, err
+		}
+
+		movies = append(movies, &movie)
+	}
+
+	if len(movies) < 1 {
+		log.Println("No movies found in the table")
+		return nil, ErrNoRecord
+	}
+	return movies, nil
 }
