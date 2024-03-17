@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	_ "github.com/jackc/pgx/v5"
+	"golang.org/x/crypto/bcrypt"
 	"log"
 	"time"
 )
@@ -35,6 +37,11 @@ type Models struct {
 	Actor      Actor
 	Movie      Movie
 	ActorMovie ActorMovie
+}
+
+type User struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
 }
 
 type Actor struct {
@@ -70,6 +77,30 @@ func New(dbPool *sql.DB) Models {
 	}
 }
 
+// Methods for User
+func (u *User) auth() {
+	bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(u.Password))
+}
+
+func (u *User) isAuthenticated() {
+}
+
+func (u *User) isAdmin() {
+}
+
+func (u *User) GetByEmail() (string, string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	query := `SELECT password, role FROM users WHERE email = $1`
+	_, err := db.QueryContext(ctx, query, u.Email)
+	if err != nil {
+		log.Println("Error getting user by email from the table", err)
+		return "", "", err
+	}
+	return "", "", err
+}
+
 //Methods for Actor
 
 func (a *Actor) GetAll() ([]*Actor, error) {
@@ -81,6 +112,7 @@ func (a *Actor) GetAll() ([]*Actor, error) {
 
 	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
+		log.Println("Error getting all actors from the table", err)
 		return nil, err
 	}
 	defer func(rows *sql.Rows) {
@@ -131,13 +163,40 @@ func (a *Actor) Create() (*Actor, error) {
 func (a *Actor) GetByID() (*Actor, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
-	query := `SELECT * FROM actors WHERE actorid = $1`
-	_, err := db.ExecContext(ctx, query, a.ActorID)
+	query := `SELECT actorid, name, gender, dateofbirth FROM actors WHERE actorid = $1`
+	rows, err := db.QueryContext(ctx, query, a.ActorID)
 	if err != nil {
 		log.Println("Error getting actor by id from the table", err)
 		return nil, err
 	}
-	return a, nil
+
+	defer func(rows *sql.Rows) {
+		err = rows.Close()
+		if err != nil {
+			log.Println("Error closing rows", err)
+		}
+	}(rows)
+
+	actor := &Actor{}
+	for rows.Next() {
+		err = rows.Scan(
+			&actor.ActorID,
+			&actor.Name,
+			&actor.Gender,
+			&actor.DateOfBirth,
+		)
+		if err != nil {
+			log.Println("Error scanning actor rows", err)
+			return nil, err
+		}
+	}
+
+	//defaultDate := time.Date(1000, 01, 01, 0, 0, 0, 0, time.UTC)
+	if !actor.DateOfBirth.Valid {
+		return nil, errors.New("no actor found")
+	}
+	log.Println("Actor: ", actor.ActorID, actor.DateOfBirth.Time, actor.DateOfBirth.Valid)
+	return actor, nil
 }
 
 func (a *Actor) Update() (*Actor, error) {
@@ -161,4 +220,16 @@ func (a *Actor) Update() (*Actor, error) {
 		return nil, err
 	}
 	return res, nil
+}
+
+func (a *Actor) Delete() error {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+	query := `DELETE FROM actors WHERE actorid = $1`
+	_, err := db.ExecContext(ctx, query, a.ActorID)
+	if err != nil {
+		log.Println("Error deleting actor from the table", err)
+		return err
+	}
+	return nil
 }

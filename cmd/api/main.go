@@ -34,6 +34,8 @@ func main() {
 		Handler: app.routes(),
 	}
 
+	log.Println("Starting server on port: ", srv.Addr)
+
 	err := srv.ListenAndServe()
 	if err != nil {
 		log.Println("Error starting server: ", err)
