@@ -216,7 +216,7 @@ func (a *Actor) Update() (*Actor, error) {
 	res, err := a.GetByID()
 	log.Println("Updated actor: ", res)
 	if err != nil {
-		log.Println("Error getting actor by id from the table", err)
+		log.Println("Error error returning updated actor from the table", err)
 		return nil, err
 	}
 	return res, nil
@@ -229,6 +229,147 @@ func (a *Actor) Delete() error {
 	_, err := db.ExecContext(ctx, query, a.ActorID)
 	if err != nil {
 		log.Println("Error deleting actor from the table", err)
+		return err
+	}
+	return nil
+}
+
+//Methods for Movie
+
+func (m *Movie) GetAll(sortParam string) ([]*Movie, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	var query string
+	switch sortParam {
+	case "date":
+		query = `SELECT movieid, title, description, rating, releasedate FROM movies ORDER BY releasedate`
+	case "title":
+		query = `SELECT movieid, title, description, rating, releasedate FROM movies ORDER BY title`
+	case "rating":
+		fallthrough
+	case "":
+		query = `SELECT movieid, title, description, rating, releasedate FROM movies ORDER BY rating DESC`
+	default:
+		log.Println("Invalid sort parameter")
+		return nil, errors.New("invalid sort parameter")
+	}
+	rows, err := db.QueryContext(ctx, query)
+	if err != nil {
+		log.Println("Error getting all movies from the table", err)
+		return nil, err
+	}
+	defer func(rows *sql.Rows) {
+		err = rows.Close()
+		if err != nil {
+			log.Println("Error closing rows", err)
+		}
+	}(rows)
+	var movies []*Movie
+
+	for rows.Next() {
+		var movie Movie
+		err = rows.Scan(
+			&movie.MovieID,
+			&movie.Title,
+			&movie.Description,
+			&movie.Rating,
+			&movie.ReleaseDate,
+		)
+		if err != nil {
+			log.Println("Error scanning movie rows", err)
+			return nil, err
+		}
+
+		movies = append(movies, &movie)
+	}
+	return movies, nil
+}
+
+func (m *Movie) GetByID() (*Movie, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+	query := `SELECT movieid, title, description, rating, releasedate FROM movies WHERE movieid = $1`
+	rows, err := db.QueryContext(ctx, query, m.MovieID)
+	if err != nil {
+		log.Println("Error getting movie by id from the table", err)
+		return nil, err
+	}
+
+	defer func(rows *sql.Rows) {
+		err = rows.Close()
+		if err != nil {
+			log.Println("Error closing rows", err)
+		}
+	}(rows)
+
+	movie := &Movie{}
+	for rows.Next() {
+		err = rows.Scan(
+			&movie.MovieID,
+			&movie.Title,
+			&movie.Description,
+			&movie.Rating,
+			&movie.ReleaseDate,
+		)
+		if err != nil {
+			log.Println("Error scanning movie rows", err)
+			return nil, err
+		}
+	}
+
+	if !movie.ReleaseDate.Valid {
+		return nil, errors.New("no movie found")
+	}
+	log.Println("Movie: ", movie)
+	return movie, nil
+}
+
+func (m *Movie) Create() (*Movie, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	query := `INSERT INTO movies (title, description, rating, releasedate)
+	values ($1, $2, $3, $4)`
+	_, err := db.ExecContext(ctx, query, m.Title, m.Description, m.Rating, m.ReleaseDate)
+	if err != nil {
+		log.Println("Error inserting movie into a table", err)
+		encoder, _ := json.Marshal(m)
+		log.Println("Movie: ", string(encoder))
+		return nil, err
+	}
+	return m, nil
+}
+
+func (m *Movie) Update() (*Movie, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+	formattedRD, _ := json.Marshal(m.ReleaseDate.Time)
+	log.Println("Formatted DOB: ", string(formattedRD))
+	query := `UPDATE movies SET title = CASE WHEN $1 = '' THEN title ELSE COALESCE($1) END, description = CASE WHEN $2 = '' THEN description ELSE COALESCE($2) END, rating = CASE WHEN $3 = 0 THEN rating ELSE COALESCE($3) END, releasedate = CASE WHEN $4 < '1000-1-1' THEN releasedate ELSE CAST(COALESCE($4) AS DATE) END WHERE movieid = ($5)`
+	_, err := db.ExecContext(ctx, query, m.Title, m.Description, m.Rating, formattedRD, m.MovieID)
+	if err != nil {
+		log.Println("Error updating movie in the table", err)
+		encoder, _ := json.Marshal(m)
+		log.Println("Movie: ", string(encoder))
+		return nil, err
+	}
+	res, err := m.GetByID()
+	log.Println("Updated movie: ", res)
+	if err != nil {
+		log.Println("Error returning updated movie from the table ", err)
+		return nil, err
+	}
+	return res, nil
+}
+
+func (m *Movie) Delete() error {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+	query := `DELETE FROM movies WHERE movieid = $1`
+	_, err := db.ExecContext(ctx, query, m.MovieID)
+	if err != nil {
+		log.Println("Error deleting movie from the table", err)
 		return err
 	}
 	return nil

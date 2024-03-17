@@ -11,10 +11,22 @@ import (
 func (app *Config) HandleActors(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.Method == http.MethodGet && len(r.URL.Query()) > 0:
+		expectedParams := map[string]bool{
+			"id": true,
+		}
+
+		for param := range r.URL.Query() {
+			if !expectedParams[param] {
+				log.Println("Invalid request parameter: ", param)
+				app.errorJSON(w, errors.New("invalid request parameter "), http.StatusBadRequest)
+				return
+			}
+		}
+
 		var actor *models.Actor
 		var err error
 		app.readJSON(r, w, &actor)
-		actor.ActorID, err = strconv.Atoi(r.URL.Query().Get("actorid"))
+		actor.ActorID, err = strconv.Atoi(r.URL.Query().Get("id"))
 		if err != nil {
 			log.Println("Error getting actor, unsupported value", err)
 			app.errorJSON(w, errors.New("invalid request"), http.StatusBadRequest)
@@ -64,11 +76,7 @@ func (app *Config) HandleActors(w http.ResponseWriter, r *http.Request) {
 		//handler for a put request
 	case r.Method == http.MethodPatch:
 		// Handle put request ==> update actor and return updated entry
-		actor := &models.Actor{
-			//Gender:      "",
-			//DateOfBirth: models.Date{},
-			//Name:        "",
-		}
+		actor := &models.Actor{}
 		err := app.readJSON(r, w, &actor)
 		if err != nil {
 			log.Println("Error reading request", err)
@@ -85,19 +93,30 @@ func (app *Config) HandleActors(w http.ResponseWriter, r *http.Request) {
 
 		//handler for a delete request
 	case r.Method == http.MethodDelete:
+		expectedParams := map[string]bool{
+			"id": true,
+		}
+
+		for param := range r.URL.Query() {
+			if !expectedParams[param] {
+				log.Println("Invalid request parameter: ", param)
+				app.errorJSON(w, errors.New("invalid request parameter. "), http.StatusBadRequest)
+				return
+			}
+		}
 		var err error
-		r.URL.Query().Get("actorid")
 		actor := &models.Actor{}
-		actor.ActorID, err = strconv.Atoi(r.URL.Query().Get("actorid"))
+		actor.ActorID, err = strconv.Atoi(r.URL.Query().Get("id"))
 		if err != nil {
-			log.Println("Error deleting actor, unsupported value", err)
+			log.Println("Error deleting actor, invalid value", err)
 			app.errorJSON(w, errors.New("invalid request"), http.StatusBadRequest)
 			return
 		}
 		err = actor.Delete()
+
 		if err != nil {
 			log.Println("Error deleting actor", err)
-			app.errorJSON(w, errors.New("error creating actor"), http.StatusInternalServerError)
+			app.errorJSON(w, errors.New("error deleting actor"), http.StatusInternalServerError)
 			return
 		}
 		app.writeJSON(w, http.StatusCreated, jsonResponse{Error: false, Message: "Actor successfully deleted"})
