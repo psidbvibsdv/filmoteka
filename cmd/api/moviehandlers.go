@@ -322,7 +322,7 @@ func (app *Config) HandleActorMovie(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodPost:
 		app.addActorToMovie(w, r)
 	case r.Method == http.MethodDelete:
-		//TODO: implement delete actor from movie
+		app.deleteActorFromMovie(w, r)
 	}
 }
 
@@ -331,6 +331,8 @@ func (app *Config) addActorToMovie(w http.ResponseWriter, r *http.Request) {
 		ActorID int `json:"actorid"`
 		MovieID int `json:"movieid"`
 	}
+	movie := &models.Movie{}
+	actor := &models.Actor{}
 	req := &request{}
 	err := app.readJSON(r, w, &req)
 	log.Println("Movie: ", req)
@@ -345,5 +347,59 @@ func (app *Config) addActorToMovie(w http.ResponseWriter, r *http.Request) {
 		app.errorJSON(w, errors.New("error adding actor to movie"), http.StatusInternalServerError)
 		return
 	}
-	app.writeJSON(w, http.StatusCreated, jsonResponse{Error: false, Message: "Actor added to movie", Data: req})
+	movie.MovieID = req.MovieID
+	movie, err = movie.GetByID()
+	if err != nil {
+		log.Println("Error getting movie", err)
+		app.errorJSON(w, err, http.StatusInternalServerError)
+		return
+	}
+	actor.ActorID = req.ActorID
+	actor, err = actor.GetByID()
+	if err != nil {
+		log.Println("Error getting actor", err)
+		app.errorJSON(w, err, http.StatusInternalServerError)
+		return
+	}
+	app.writeJSON(w, http.StatusCreated, jsonResponse{Error: false, Message: fmt.Sprintf("Actor  '%s'  succesfully added to the movie (%s) ", actor.Name, movie.Title), Data: req})
+
+}
+
+func (app *Config) deleteActorFromMovie(w http.ResponseWriter, r *http.Request) {
+	type request struct {
+		ActorID int `json:"actorid"`
+		MovieID int `json:"movieid"`
+	}
+	req := &request{}
+	movie := &models.Movie{}
+	actor := &models.Actor{}
+	err := app.readJSON(r, w, &req)
+	log.Println("Request: ", req)
+	if err != nil {
+		log.Println("Error reading request", err)
+		app.errorJSON(w, errors.New("error reading request"), http.StatusBadRequest)
+		return
+	}
+	err = app.Models.Movie.DeleteActorFromMovie(req.ActorID, req.MovieID)
+	if err != nil {
+		log.Println("Error deleting actor from movie", err)
+		app.errorJSON(w, errors.New("error deleting actor from movie"), http.StatusInternalServerError)
+		return
+	}
+	movie.MovieID = req.MovieID
+	movie, err = movie.GetByID()
+	if err != nil {
+		log.Println("Error getting movie", err)
+		app.errorJSON(w, err, http.StatusInternalServerError)
+		return
+	}
+	actor.ActorID = req.ActorID
+	actor, err = actor.GetByID()
+	if err != nil {
+		log.Println("Error getting actor", err)
+		app.errorJSON(w, err, http.StatusInternalServerError)
+		return
+	}
+	app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Message: fmt.Sprintf("Actor  '%s'  succesfully deleted from the movie (%s) ", actor.Name, movie.Title), Data: req})
+
 }

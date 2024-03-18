@@ -613,3 +613,27 @@ func (m *Movie) AddActorToMovie(actorid int, movieid int) error {
 	}
 	return nil
 }
+
+func (m *Movie) DeleteActorFromMovie(actorid int, movieid int) error {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+	a := Actor{ActorID: actorid}
+	m.MovieID = movieid
+	_, err := a.GetByID()
+	if err != nil {
+		log.Println("Error getting actor by id from the table")
+		return err
+	}
+	_, err = m.GetByID()
+	if err != nil {
+		log.Println("Error getting movie by id from the table")
+		return err
+	}
+	query := `DELETE FROM actormovie WHERE actorid = $1 AND movieid = $2`
+	_, err = db.ExecContext(ctx, query, actorid, movieid)
+	if err != nil {
+		log.Println("Error deleting actor from movie in the table", err)
+		return err
+	}
+	return nil
+}
