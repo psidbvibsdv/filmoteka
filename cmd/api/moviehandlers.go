@@ -279,3 +279,31 @@ func (app *Config) GetActorsAndMoviesForMovie(w http.ResponseWriter, r *http.Req
 		}
 	}
 }
+
+func (app *Config) HandleActorMovie(w http.ResponseWriter, r *http.Request) {
+	switch {
+	case r.Method == http.MethodPost:
+		type request struct {
+			ActorID int `json:"actorid"`
+			MovieID int `json:"movieid"`
+		}
+		req := &request{}
+		err := app.readJSON(r, w, &req)
+		log.Println("Movie: ", req)
+		if err != nil {
+			log.Println("Error reading request", err)
+			app.errorJSON(w, errors.New("error reading request"), http.StatusBadRequest)
+			return
+		}
+		err = app.Models.Movie.AddActorToMovie(req.ActorID, req.MovieID)
+		if err != nil {
+			log.Println("Error adding actor to movie", err)
+			app.errorJSON(w, errors.New("error adding actor to movie"), http.StatusInternalServerError)
+			return
+		}
+		app.writeJSON(w, http.StatusCreated, jsonResponse{Error: false, Message: "Actor added to movie", Data: req})
+
+	case r.Method == http.MethodDelete:
+		//TODO: implement delete actor from movie
+	}
+}

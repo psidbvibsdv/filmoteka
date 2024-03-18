@@ -12,7 +12,7 @@ func (app *Config) routes() http.Handler {
 	mux.HandleFunc("/actor", app.HandleActors)
 
 	//add or delete movie from the list of movies for an actor
-	mux.HandleFunc("/actor/actormovie", app.HandleActorMovies)
+	mux.HandleFunc("/movie/actormovie", app.HandleActorMovie)
 
 	//find movie by name/actors name //!done
 	mux.HandleFunc("/movie/findbyname", app.HandleMoviesByName)
