@@ -233,6 +233,49 @@ func (app *Config) HandleMoviesByName(w http.ResponseWriter, r *http.Request) {
 		} else {
 			app.errorJSON(w, errors.New("invalid request"), http.StatusBadRequest)
 		}
+	}
+}
 
+func (app *Config) GetActorsAndMoviesForMovie(w http.ResponseWriter, r *http.Request) {
+	switch {
+	case r.Method == http.MethodGet && len(r.URL.Query()) > 0:
+		expectedParams := map[string]bool{
+			"id": true,
+		}
+
+		for param := range r.URL.Query() {
+			if !expectedParams[param] {
+				log.Println("Invalid request parameter: ", param)
+				app.errorJSON(w, errors.New("invalid request parameter. "), http.StatusBadRequest)
+				return
+			}
+		}
+		movieid, idOk := r.URL.Query()["id"]
+		if idOk {
+			movie := &models.Movie{}
+			// Fetch movie by id
+			id, err := strconv.Atoi(movieid[0])
+			if err != nil {
+				log.Println("Error converting id to int", err)
+				app.errorJSON(w, errors.New("invalid id parameter"), http.StatusBadRequest)
+				return
+			}
+			movie.MovieID = id
+			res, err := movie.GetActorsAndMoviesForMovie()
+			if err != nil {
+				log.Println("Error getting result", err)
+				app.errorJSON(w, err, http.StatusInternalServerError)
+				return
+			}
+			movie, err = movie.GetByID()
+			if err != nil {
+				log.Println("Error getting movie", err)
+				app.errorJSON(w, err, http.StatusInternalServerError)
+				return
+			}
+			app.writeJSON(w, http.StatusOK, jsonResponse{Error: false, Message: fmt.Sprintf("Actors of the movie '%s' (%d) and their movies: ", movie.Title, movie.ReleaseDate.Time.Year()), Data: res})
+		} else {
+			app.errorJSON(w, errors.New("invalid request"), http.StatusBadRequest)
+		}
 	}
 }

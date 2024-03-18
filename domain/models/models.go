@@ -39,6 +39,7 @@ type Models struct {
 	Actor          Actor
 	Movie          Movie
 	MovieWithActor MovieWithActor
+	ActorMovies    ActorMovies
 }
 
 type User struct {
@@ -62,6 +63,12 @@ type MovieWithActor struct {
 	ActorName   string  `json:"actorname"`
 }
 
+type ActorMovies struct {
+	ActorId int
+	Name    string
+	Movies  []*Movie
+}
+
 type Movie struct {
 	MovieID     int     `json:"movieid,omitempty"`
 	Title       string  `json:"Title"`
@@ -80,6 +87,7 @@ func New(dbPool *sql.DB) Models {
 		Actor:          Actor{},
 		Movie:          Movie{},
 		MovieWithActor: MovieWithActor{},
+		ActorMovies:    ActorMovies{},
 	}
 }
 
@@ -480,4 +488,102 @@ func (m *Movie) GetByMovieName(moviename string) ([]*Movie, error) {
 		return nil, ErrNoRecord
 	}
 	return movies, nil
+}
+
+func (m *Movie) GetActorsForMovie() ([]*Actor, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	query := `SELECT a.ActorID, a.Name FROM Actors a JOIN actormovie am ON a.actorid = am.actorid WHERE am.movieid = $1`
+
+	rows, err := db.QueryContext(ctx, query, m.MovieID)
+	if err != nil {
+		log.Println("Error getting actors for movie from the table", err)
+		return nil, err
+	}
+	defer func(rows *sql.Rows) {
+		err = rows.Close()
+		if err != nil {
+			log.Println("Error closing rows", err)
+		}
+	}(rows)
+
+	var actors []*Actor
+	for rows.Next() {
+		var actor Actor
+		err = rows.Scan(
+			&actor.ActorID,
+			&actor.Name,
+		)
+		if err != nil {
+			log.Println("Error scanning actor rows", err)
+			return nil, err
+		}
+
+		actors = append(actors, &actor)
+
+	}
+	return actors, nil
+}
+
+func (m *Movie) GetMoviesForActor(actorid int) ([]*Movie, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
+	defer cancel()
+
+	query := `SELECT m.movieid, m.title, m.description, m.rating, m.releasedate FROM Movies m JOIN actormovie am ON m.movieid = am.movieid WHERE am.actorid = $1`
+
+	rows, err := db.QueryContext(ctx, query, actorid)
+	if err != nil {
+		log.Println("Error getting movies for actor from the table", err)
+		return nil, err
+	}
+	defer func(rows *sql.Rows) {
+		err = rows.Close()
+		if err != nil {
+			log.Println("Error closing rows", err)
+		}
+	}(rows)
+
+	var movies []*Movie
+	for rows.Next() {
+		var movie Movie
+		err = rows.Scan(
+			&movie.MovieID,
+			&movie.Title,
+			&movie.Description,
+			&movie.Rating,
+			&movie.ReleaseDate,
+		)
+		if err != nil {
+			log.Println("Error scanning movie rows", err)
+			return nil, err
+		}
+
+		movies = append(movies, &movie)
+
+	}
+	return movies, nil
+
+}
+
+func (m *Movie) GetActorsAndMoviesForMovie() ([]*ActorMovies, error) {
+	actors, err := m.GetActorsForMovie()
+	if err != nil {
+		log.Println("Error getting actors for movie", err)
+		return nil, err
+	}
+	var result []*ActorMovies
+	for _, actor := range actors {
+		movies, err := m.GetMoviesForActor(actor.ActorID)
+		if err != nil {
+			log.Println("Error getting movies for actor", err)
+			return nil, err
+		}
+		result = append(result, &ActorMovies{
+			ActorId: actor.ActorID,
+			Name:    actor.Name,
+			Movies:  movies,
+		})
+	}
+	return result, nil
 }

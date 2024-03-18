@@ -17,6 +17,9 @@ func (app *Config) routes() http.Handler {
 	//find movie by name/actors name //!done
 	mux.HandleFunc("/movie/findbyname", app.HandleMoviesByName)
 
+	//find movie by id and lisr all actors with the list of movies for each actor
+	mux.HandleFunc("/movie/actorswithmovies", app.GetActorsAndMoviesForMovie)
+
 	//movie CRUD ops !done
 	mux.HandleFunc("/movie", app.HandleMovies)
 
