@@ -45,6 +45,7 @@ type Models struct {
 type User struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
+	Role     string `json:"role"`
 }
 
 type Actor struct {
@@ -96,23 +97,24 @@ func (u *User) auth() {
 	bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(u.Password))
 }
 
-func (u *User) isAuthenticated() {
-}
-
-func (u *User) isAdmin() {
-}
-
-func (u *User) GetByEmail() (string, string, error) {
+func (u *User) GetByEmail() (password string, role string, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), dbTimeout)
 	defer cancel()
 
 	query := `SELECT password, role FROM users WHERE email = $1`
-	_, err := db.QueryContext(ctx, query, u.Email)
+	_, err = db.QueryContext(ctx, query, u.Email)
 	if err != nil {
 		log.Println("Error getting user by email from the table", err)
 		return "", "", err
 	}
-	return "", "", err
+
+	err = db.QueryRowContext(ctx, query, u.Email).Scan(&password, &role)
+	if err != nil {
+		log.Println("Error getting user by email from the table", err)
+		return "", "", err
+	}
+
+	return password, role, err
 }
 
 //Methods for Actor

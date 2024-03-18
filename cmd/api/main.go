@@ -3,6 +3,8 @@ package main
 import (
 	"database/sql"
 	"filmoteka/domain/models"
+	"github.com/alexedwards/scs/v2"
+	"github.com/alexedwards/scs/v2/memstore"
 	_ "github.com/jackc/pgconn"
 	_ "github.com/jackc/pgx/v4"
 	_ "github.com/jackc/pgx/v4/stdlib"
@@ -15,8 +17,9 @@ import (
 var count uint8
 
 type Config struct {
-	Storage *sql.DB
-	Models  models.Models
+	Storage        *sql.DB
+	Models         models.Models
+	SessionManager *scs.SessionManager
 }
 
 func main() {
@@ -25,8 +28,9 @@ func main() {
 	defer conn.Close()
 
 	app := Config{
-		Storage: conn,
-		Models:  models.New(conn),
+		Storage:        conn,
+		Models:         models.New(conn),
+		SessionManager: newSessionManager(),
 	}
 
 	srv := http.Server{
@@ -79,4 +83,14 @@ func openDB(dsn string) (*sql.DB, error) {
 	}
 
 	return db, nil
+}
+
+func newSessionManager() *scs.SessionManager {
+	sessionManager := scs.New()
+	sessionManager.Lifetime = 24 * time.Hour
+	sessionManager.Cookie.Persist = true
+	sessionManager.Cookie.SameSite = http.SameSiteLaxMode
+	sessionManager.Cookie.Secure = true
+	sessionManager.Store = memstore.New()
+	return sessionManager
 }

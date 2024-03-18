@@ -23,5 +23,5 @@ func (app *Config) routes() http.Handler {
 	//movie CRUD ops !done
 	mux.HandleFunc("/movie", app.HandleMovies)
 
-	return mux
+	return app.SessionManager.LoadAndSave(mux)
 }
