@@ -2,7 +2,16 @@ package main
 
 import (
 	"database/sql"
-	"filmoteka/domain/models"
+	"filmoteka/internal/delivery/http/routes"
+	"filmoteka/internal/domain/usecase"
+	"filmoteka/internal/domain/usecase/actormovieusecase"
+	"filmoteka/internal/domain/usecase/actorusecase"
+	"filmoteka/internal/domain/usecase/movieusecase"
+	"filmoteka/internal/domain/usecase/userusecase"
+	"filmoteka/internal/storage/actormoviestorage"
+	"filmoteka/internal/storage/actorstorage"
+	"filmoteka/internal/storage/moviestorage"
+	"filmoteka/internal/storage/userstorage"
 	"github.com/alexedwards/scs/v2"
 	"github.com/alexedwards/scs/v2/memstore"
 	_ "github.com/jackc/pgconn"
@@ -16,26 +25,35 @@ import (
 
 var count uint8
 
-type Config struct {
-	Storage        *sql.DB
-	Models         models.Models
-	SessionManager *scs.SessionManager
-}
-
 func main() {
 
 	conn := connectToDB()
 	defer conn.Close()
 
-	app := Config{
-		Storage:        conn,
-		Models:         models.New(conn),
-		SessionManager: newSessionManager(),
+	sessionManager := newSessionManager()
+
+	userStorage := userstorage.New(conn)
+	movieStorage := moviestorage.New(conn)
+	actorStorage := actorstorage.New(conn)
+	actormovieStorage := actormoviestorage.New(conn)
+
+	userUseCase := userusecase.New(userStorage)
+	movieUseCase := movieusecase.New(movieStorage)
+	actorUseCase := actorusecase.New(actorStorage)
+	actormovieUseCase := actormovieusecase.New(actormovieStorage)
+
+	uc := usecase.UseCase{
+		UserUseCase:       userUseCase,
+		MovieUseCase:      movieUseCase,
+		ActorUseCase:      actorUseCase,
+		ActorMovieUseCase: actormovieUseCase,
 	}
+
+	r := routes.Routes(&uc, sessionManager)
 
 	srv := http.Server{
 		Addr:    os.Getenv("PORT"),
-		Handler: app.routes(),
+		Handler: r,
 	}
 
 	log.Println("Starting server on port: ", srv.Addr)
